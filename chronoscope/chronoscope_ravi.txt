@@ -1,0 +1,465 @@
+          Design, implementation, and execution of the Chronoscope/Pulsar and
+                              Chronoscope/FRB surveys
+
+Vikram Ravi
+
+
+[1] Introduction
+
+This document is a living summary of the pulsar survey program with the DSA-2000. The
+intended audience is current and potential DSA-2000 team members, and those more
+generally interested in working on the survey. Below I introduce basic specifications of the
+telescope and the planned surveys relevant to the Chronoscope1, and detail plans for
+implementation and operations of the latter. I also summarize the expected data products.
+The pulsar survey is limited to the search for periodic (with potential acceleration due to
+binary orbital motion) signals, and the FRB survey is limited to the search for isolated
+pulses with no assumptions about time-correlation. Both surveys search for signals at
+different dispersion measures (DMs).
+
+[1.1] DSA-2000 reference
+
+The Chronoscope surveys will be executed commensally with all DSA-2000 operations, and
+will use compute hardware running in parallel with the Radio Camera, Pulsar Timing, and
+other potential pipelines.
+
+For reference, here is a collection of useful parameters of the DSA-2000.
+ Parameter                                Value
+ Number of antennas                       1650
+ Dish diameter                            6.15m
+ Field of view                            7 deg^2 at 1.35GHz
+ Array size                               15km EW x 19km NS
+ Array configuration                      Pseudo-random, designed to
+                                          minimize PSF sidelobes
+ PSF                                      3.05’’ at 1.35GHz, circular at
+                                          DEC=0deg
+ Tsys/eta                                 25-40K, elevation dependent
+ Array SEFD at boresight                  1.41-2.25Jy, elevation dependent
+ Band                                     0.7-2GHz
+ Channelization                           10^4 x 130.2kHz
+ Survey tiling                            6x5 21-min pointings with approx.
+                                          2.6deg^2 unique FoV per pointing
+
+1
+ A chronoscope is an instrument designed to measure very short time intervals with high precision. In
+science fiction, a chronoscope is typically portrayed as a device that can observe events across time -
+essentially a "time viewer" that allows you to see into the past or future without physically traveling there.
+ Cadence                                Galactic Plane: ~5500 deg^2
+                                        observed 2x per year, logarithmic
+                                        cadence
+                                        Other: variable depth / cadence
+
+[1.2] Specifications of the Chronoscope/Pulsar survey
+
+Two data-processing pipelines for pulsar searching will be implemented on the
+Chronoscope hardware, enabling
+- a targeted search in (nominally) 4000 beams steered towards continuum sources, and
+- a blind search in (nominally) 1e6 beams that tile the central part of the DSA-2000
+   primary beam.
+
+The baseline plan for the targeted pulsar search is to steer full-array beams towards
+continuum sources detected in early survey epochs. A few x 1e4 of sources are expected
+per unique survey pointing, and we anticipate that via exclusion of resolved surveys, and
+cross-matching with multi-wavelength surveys, we can reduce the number of candidate
+pulsars per pointing to ~4000. This process will likely be less efficient in regions of the
+Galactic Plane, where the numbers of pulsars per pointing wil exceed a few hundred. This is
+where the blind search, with reduced sensitivity or time-sharing, can be applied.
+
+Fiducial parameters relevant to the pulsar searches are given below.
+ Parameter                      Targeted search               Blind search
+ Number of beams                4000                          2e5
+ Channels                       2500                          2500
+ Band                           Approx. bottom 25%            Approx. bottom 25%
+ DM trials                      500                           500
+ Time resolution                0.1ms                         0.1ms
+ Maximum dwell time             1260s                         60s
+ Period range                   1ms – 5s                      1ms – 5s
+ Acceleration trials            500                           5
+ Polarizations                  I                             I
+ Number of bits                 4                             4
+
+We do not plan to store search-mode data. Instead, all searching needs to be done in
+quasi-real time, on the timescale of the dwell time noted in the table above. The dwell time
+is bounded strongly by the memory requirements, and less strongly by the compute
+requirements. Typical pointings are anticipated to be around 21 min in duration.
+
+The targeted-search beams will also be used for follow-up folding observations to confirm
+and time pulsar discoveries. Follow-up occurs on two timecales. First, the 6x5-pointing
+mosaics tiles will be observed over a ~week, with significant overlap between adjacent
+pointings at the bottom of the band. This enables some beams to be steered towards
+pulsars and pulsar candidates providing ~6 epochs over ~1 week. Second, the tiles will be
+repeated, at least a few times, and ~10 times in 5500 deg^2 containing the Galactic Plane
+and the Bulge.
+
+The parameters given above will be extended if compute resources allow. Major extensions
+include the number of channels, the number of beams in the blind search, and the dwell
+time for the blind search. The dwell time refers to the longest-duration fully coherent
+search that is envisaged, including all acceleration trials. Extensions in the dwell time, and
+the number of channels and beams, provide S/N improvements that scale as the square
+root of the extension factor.
+
+[1.3] Specifications of the Chronoscope/FRB survey
+
+The FRB search is commensal, conducted in real time in a large number of beams that tile
+the FoV.
+
+Fiducial parameters relevant to the FRB search are given below.
+ Parameter                      Value
+ Number of beams                6e6
+ Channels                       2500
+ Band                           Approx. bottom 25%
+ DM trials                      2000
+ Time resolution                1ms
+ Width trials                   9 (2^0 to 2^8 samples)
+ Maximum DM (pc/cc)             5000
+ Polarizations                  I
+ Number of bits                 4
+ Max trigger latency            DM delay * 1.2
+
+The search is expected to provide low-latency triggers upon candidate detection to enable
+voltage dumps. The search occurs in two stages: naïve peak-finding, followed by a
+clustering / correlation analysis of the peaks to identify likely candidates.
+
+The parameters given above will be extended if compute resources allow. The number of
+channels is the major potential extension, potentially providing S/N improvements that
+scale as the square root of the number of channels. Additional width and DM trials will
+provide more marginal improvements.
+
+[2] Pipeline design considerations
+
+[2.1] Overview
+Block diagrams of the pipelines are shown below in Figures 1 and 2. The pipelines begin
+with beamformer blocks, which in our terms also include dedispersion transforms. These
+are the most compute intensive stages of the pipelines, outputting time-series data for
+different beams / DMs, and potentially a few frequency sub-bands. In the case of the FRB
+search, little additional processing is required besides peak finding and clustering. The
+search is expected to be dynamic in the sense of the search thresholds being responsive to
+the detection rate. In the case of the pulsar search, time-series data need to be
+transformed to a periodicity basis (via, e.g., FFT, or a streaming folding algorithm) prior to
+searching. An iterative approach is assumed, where probabilistic choices will be made to
+reject datasets based on partial searches. In both pipelines, candidates trigger the
+preparation of output metadata based on further analysis of specific datasets from the
+buffered time series.
+
+
+
+
+Figure 1: Outline of the Chronoscope/Pulsar search
+
+
+
+
+Figure 2: Outline of the Chronoscope/FRB search
+[2.2] Computational considerations for the beamformer, including dedispersion
+
+For the targeted pulsar search, we envisage a voltage beamformer followed by
+dedispersion. Given input voltage data from NA antennas in NC channels of width FC, the
+compute required to form NB beams is approximately
+RIN = 16NANCFC bits/s, assuming 4-bit complex data
+OPS = 16NANCNBFC operations / s
+ROUT = 4NBNC/Tsamp bits/s, assuming 4-bit intensities.
+
+For the fiducial numbers in the tables above, we have RIN = 8.6 Tb/s, OPS = 34.4 POPS, and
+ROUT = 0.4 Tb/s. The beamforming operation is dominated by matrix multiplications with
+approximate dimensions M=NB, K=NA, and N can be tuned to be as large or as small as
+required.
+
+Brute-force dedispersion, given NDM DM trials and a sampling time of Tsamp, requires
+approximately
+OPS = 2NBNCNDM/ Tsamp operations / s
+ROUT = 16NBNDM/ Tsamp bits/s, assuming 16-bit time series.
+
+For the fiducial numbers in the tables above, we have OPS = 100 TOPS and R OUT = 0.32 Tb/s.
+With a data preparation step that involves FFT-ing each time-series in each channel and
+beam (a relatively small compute load), the dedispersion can be entirely done via matrix
+operations, followed by a relatively small output step where inverse-FFTs are applied.
+
+Forming a significantly larger number of beams via voltage beamforming is not feasible,
+given the already high compute costs that scale as N B. Thus visibility-based beamforming is
+required. The compute is approximately
+OPS = 8(NA+1)NANCFC + 16NBlog2(NB)NC/Tsamp operations / s
+with input and output data rates calculated as before. For fiducial numbers this is around
+13 POPS, and ROUT = 60 Tb/s. The operations are dominated by matrix multiplications with
+approximate dimensions M=NA, K>=256, and N=NA.
+
+Compute costs for dedispersion are also similar feasible. However, the memory
+requirements for dedispersion are significant. The DM delay is given by
+TDM = 4.15 * DM * (F1,GHz-2 – F2,GHz-2) ms.
+For a kernel to compute a single time sample at each DM, an amount of data totaling T DM in
+time must be buffered at either the input or the output.2 Considering the FRB search, and
+assuming 2500 channels above 0.8GHz are used, TDM = 16s. Given the output data rate of
+the beamformer, which would not change significantly post dedispersion, this corresponds
+to 120 TB. Some minor compromises could be made to make this feasible, for example,
+shifting the lower frequency to 1 GHz, or lowering the number of beams. If this were done,
+
+
+2
+    In practise, around 35% of this data actually need be buffered, given the DM curve.
+and brute-force dedispersion were applied, something like 60 POPS would be required. A
+Fourier domain approach could again be used, enabling matrix operations.
+
+However, it is also possible to further integrate the beamforming and dedispersion steps to
+save memory if required, but at the expense of compute. In this scenario, the input voltages
+are buffered for a length >=TDM, and are brute-force dedispersed with no frequency
+summation into NCDM coarse DM trials spanning the full DM range of interest. The
+beamforming is then duplicated NCDM times, but frequency summation by a factor of N CDM is
+possible in the gridding step prior to beamforming. The value of K in the matrix
+multiplications is, for example, increased by NCDM. Post-beamforming, fine dedispersion is
+done for each of the coarse DM trials.
+
+[2.3] Computational considerations for pulsar searching
+
+Real-time pulsar searching can be a major sink of computational resources, including
+memory. Pulsar searching involves transforming input time-series into a basis that
+separates signals of different periodicities. In practise, pulsar searching usually involves
+the Fourier analysis of data spanning an entire observation. The total data volume for an
+observation would be
+DPSR = NBNDMTOBS/ Tsamp bytes, assuming 8-bit data
+For the fiducial numbers in the tables above, including TOBS = 21min, DPSR = 25.2TB (targeted
+search), and DPSR = 6.3PB (blind search). A factor of two greater memory is likely required
+for processing.
+
+Some savings can be realized. For example, the overlap-add method can be used to
+combine DFTs of time-chunks. For example, given the period range of interest, all
+frequency information is contained within 10s of data. The compute costs are
+OPS = 5NACCNBNDM/ Tsamp * log2(TOBS/Tsamp)
+RIO = 3NACCNBNDM/ Tsamp bytes/s, assuming out of place FFT
+Considering TOBS = 10s, we have OPS = 850 TOPS and RIO = 30 TB/s (targeted search), and
+OPS = 2.1 POPS and RIO = 75 TB/s (blind search).
+
+Folding operations, with computational complexity O(NsampNcandidates), will be applied where
+possible to maximize S/N. For example, once candidate periodicities are identified using a
+part of the data, the remainder of the data can be folded on these periods. After an
+observation, the data will anyway need to be folded on all candidate periodicities. We also
+intend to investigate full Keplerian template searches, which involve convolution
+operations.
+
+[4] Implementation plans
+
+A vast body of software exists that performs all functionality incorporated within the
+Chronoscope. For example, tensor-core implementations exist for both the voltage-
+beamforming3 and correlation4 steps. Various high-performance FFT libraries exist,
+including cuFFT/cuFFTDx, vkFFT, and tcFFT. Dedispersion on GPUs is well-developed, e.g.,
+in the dedisp5 and AstroAccelerate6 libraries, with well-understood performance.
+Moderate-performance FRB and pulsar search codes exist.
+
+However, it is unlikely that existing codes meet our performance requirements within a
+reasonable hardware cap. We have thus embarked on a process to implement an
+integrated pipeline within the framework of the quda7 package, which offers several
+advantages in terms of e.g., memory-management, auto-tuning, and integration of kernels.
+The development is focused at present on the beamforming and dedispersion steps, which
+dominate the compute. In parallel, to enable the testing of assumptions regarding
+performance of target hardware architectures, we have embarked on the creation of a
+benchmarking package, described below in Section [7].
+
+The target hardware for the Chronoscope is two Vera Rubin NVL144 racks (see Figure 3
+below). Each rack includes 18 trays of compute, fully connected via NVLink. Each tray
+contains two Vera CPUs, and two packages of four Rubin GPU dies each. Each GPU has
+144GB of HBM4 memory, and each CPU has 1.5TB of likely LPDDR6X memory, addressible
+on the GPU via NVLink-C2C. Interconnect between racks via CX9 is possible at up to
+28.8TB/s, which is also the data ingest rate. Based on the existing Grace Blackwell NVL72
+systems, each rack is likely to have 144 NVMe drives, which can be, e.g., 8TB each with 1-3
+DWPD8, providing a PB of storage per rack.
+
+Anticipated performance specifications of the Vera Rubin NVL144 racks, pieced together
+from online information and using the existing Grace Blackwell GB200 NVL72 racks as a
+reference, are given below.
+  Parameter                    Rubin GPU                     NVL144 rack
+  FP4 FLOPS (tensor)           25 PFLOPS                     3.6 EFLOPS
+  FP8 FLOPS (tensor            8.33 PFLOPS                   1.2 EFLOPS
+  FP16 FLOPS (tensor)          4.17 PFLOPS                   600 PFLOPS
+  FP32 FLOPS (CUDA cores)      >80 TFLOPS                    11.5 PFLOPS
+  HBM (TB)                     0.144                         20.736
+  HBM bandwidth (TB/s)         13                            13
+  LPDDR6X memory (TB)          0.375                         54
+  LPDDR6X bandwidth (TB/s) ~1                                ~1
+  NVLink bandwidth (TB/s)      1.8                           260
+
+
+3
+  https://arxiv.org/abs/2505.03269
+4
+  https://www.aanda.org/articles/aa/full_html/2021/12/aa41896-21/aa41896-21.html
+5
+  https://github.com/svlugt/dedisp
+6
+  https://github.com/AstroAccelerateOrg/astro-accelerate
+7
+  https://github.com/lattice/quda
+8
+  https://www.storagenewsletter.com/2024/10/23/wd-pcie-gen5-dc-sn861-e-1s-enterprise-class-nvme-
+ssds-certified/
+ NVMe storage (TB)                        8                                1152
+ Data ingest rate (Tb/s)                  1.024 (PCIe 6x)                  230.4 (to CPUs)
+
+
+
+
+Figure 3: Highest-level anticipated specs of the Vera Rubin NVL144 rack.
+
+
+
+[5] Data products
+
+The Chronoscope surveys will produce data products on the cadence of candidate output.
+These will be metered based on intelligence within the search systems (the Search
+Controllers in Figures 1 and 2).
+
+Each FRB candidate will trigger the storage of the following:
+- FP16 intensity data for 64 nearby beams at the time of detection, assuming 4 frequency
+   sub-bands, and 4s post-dedispersion: 2MB. After additional processing, this can be
+   reduced by 64x to 32kB.
+- 4-bit voltage data for 16 beams formed around each FRB, assuming full-band data, 4s
+   post-dedispersion, full-pol: 334GB. After additional processing, this can be reduced by
+   16x to 21GB. These data will only be stored for real FRBs, as determined by this
+   processing.
+- Pipeline metadata, including lowest-level candidate detections for a few s surrounding
+   each event.
+Each pulsar candidate will trigger the storage of the following:
+- Dedispersed intensity data for the detection beam, assuming 4 frequency sub-bands,
+   2160s, and 4-bit data: 43.2 MB
+- Pipeline metadata, including summary of candidates detected during a pointing.
+
+Each time a pulsar is timed with the Chronoscope, the following data will be stored.
+- A Stokes I folded profile in 500 channels and 512 phase bins, assuming 4-byte data and
+   10s subints: 110MB.
+
+We anticipate metering the output of the Chronoscope as follows, resulting in the given
+data volumes.
+- 1 FRB candidate and single pulse from unknown pulsar per 4s on average, with long-
+    term storage of intensity data only: 1.26TB total
+- 1 real FRB per 600s, with long-term storage of intensity and voltage data: 5.52PB total
+- Up to 100 pulsar candidates per pointing on average, for future follow-up: 332TB total,
+    assuming 6x12801 pointings.9
+- Up to 100 pulsars timed per pointing on average: 768TB total, assuming 6x12801
+    pointings.
+
+No significant processing of these data is anticipated within the DAT subsystem, besides
+the minor editing of headers with additional observation metadata.
+
+[6] Survey execution
+
+Day to day survey operations can be broken down into understanding what is required on a
+per-pointing basis. Each pointing will require the Chronoscope to be automatically
+configured according to the location in the sky, and the progress of the survey. The data
+products will largely be automatically analyzed and archived, but the results will feed
+forward into the future operations in a variety of ways.
+
+The remainder of this section Is a WIP.
+
+[7] Appendix – limited benchmark plan
+
+Purpose
+
+    •   To test basic assumptions regarding performance scaling in the Chronoscope
+    •   To deliver a simple, easily installable package that we can share with others to run
+        benchmarking on different hardware
+    •   To familiarize ourselves and others with some major Chronoscope operations
+
+9
+ Survey details are being developed in
+https://docs.google.com/document/d/1WcfpbqBRFmEoLG0oowXfrbH6yTuHYU5_DO22g0KIHtE/edit?usp=sh
+aring
+The code will be written specifically with Nvidia superchip architectures in mind, with
+coherent CPU and GPU memory.
+
+[7.1] Visibility-based beamforming and dedispersion
+
+Given input complex voltage data of shape [Frequency, Time, Antenna], with N_F
+frequencies, N_T times, and N_A antennas, the following operations are performed:
+    1. Weight application. Apply frequency-dependent weights via Hadamard product to
+       input complex voltage data. The weighs will have shape [Frequency, Antenna].
+    2. Coarse dedispersion. For N_CD coarse DM trials out to DM_MAX, do a brute-force
+       dedispersion operation to generate an array of shape [Coarse DMs, Coarse
+       frequency, Coarse Time, Fine frequency, Fine time, Antenna]. The number of coarse
+       frequencies is N_CF = N_F / N_CD, and the number of fine frequencies is N_CD. The
+       number of fine times is, e.g., N_FT = 128. The number of coarse times is low: N_CT =
+       N_T / N_CD / N_FT.
+    3. Matrix multiplication. Next, each sub-array of [Fine frequency * Fine time, Antenna]
+       is multiplied by its hermitian transpose with m=N_A, n=N_A, k=N_FT*N_CD, such
+       that we end up with an array of shape [Coarse DMs, Coarse frequency, Coarse Time,
+       Baseline]. The matrix multiplication can be implemented efficiently with, e.g., the
+       CUTLASS HERK operation.
+    4. Fine dedispersion. Here, we can apply a simple brute-force approach (e.g., see
+       https://iopscience.iop.org/article/10.3847/1538-4365/acfef6#apjsacfef6s4) as a
+       starting point to calculate the full range of DM trials. In each case, the accumulator
+       must be a uniform UV grid, not the baseline array. This can be accomplished with a
+       lookup table of grid indices of shape [Coarse frequency, Baseline]. The output array
+       will then be [DMs, Coarse Time, Grid cell].
+    5. Imaging. Finally, each grid will be subject to a 2D FFT to form beams, such that the
+       output array will be [DMs, Coarse Time, Beams].
+
+Each step can be benchmarked independently. In practise, some concurrency is likely
+achievable, especially between operations that are memory-access intensive like
+dedispersion, and more compute intensive, like matrix multiplication.
+
+Reasonable numbers include:
+N_F = 2048
+N_T = 1e7
+N_A = 1650
+At 8-bit complex, this will use 33792GB of memory for the inputs to steps [1] and [2], which
+is not reasonable for benchmarking. I suggest benchmarking step [1] as a straightforward
+parallel Hadamard product on the CPU in a reasonably large (e.g., ~20GB) input array, with
+similar ratios between N_F : N_T : N_A as the real data. You can assume FP16 input and
+FP16 weights for this initial test.
+Step [2] is best benchmarked on a per-antenna basis. I suggest using the CPU (via a multi-
+threaded implementation) to operate on data of dimensions [N_F, N_T] for each antenna
+sequentially to populate a GPU-memory array of shape [Coarse DMs, Coarse frequency,
+Fine frequency, Fine time, Antenna] (dimensions [N_CD, N_CF, N_CD, N_FT, N_A]). This will
+test memory access speeds, and the resulting timing can be scaled to multi-CPU systems.
+Reasonable numbers:
+N_CD = 16
+N_CF = N_F / N_CD = 128
+N_FT = 128
+For the dedispersion, consider uniformly spaced DM trials in the range [0,5000) pc/cc, with
+channel frequencies given in MHz by array(2048)*0.1302+F_LO, where a good starting
+point for F_LO is 700MHz. Consider time sampling of 1/0.1302MHz = 7.68us. Given that this
+operation simply involves moving data around, I suggest moving vectors with lengths that
+assume 8-bit depths for the voltage data.
+
+The matrix multiplication in step [3] can be done from/to GPU HBM, via a strided batched
+CUTLASS HERK operating on FP8 data. Again, appropriate scaling can be applied to the
+timing results. The data can be output in FP16.
+
+Step [4] in principle operates on a very large array, and benchmarks must therefore be split
+up. It’s likely best to consider a single coarse DM, and use something like 2e4 baselines.
+Using N_CT = 5000 would be appropriate. The data can be assumed to be FP8 on the input,
+accumulated to FP16 in the dedispersed grids.
+
+Finally, step [5] represents a straightforward set of 2D FFTs. I suggest assuming FP16
+complex data, and performing complex-to-real FFTs. Batching is likely preferred. I suggest
+comparing cuFFT and tcFFT with identical plans.
+
+The above can be run with different input parameters to benchmark visibility-based
+beamforming and dedispersion for the full-field pulsar- and FRB-search cases. It would be
+interesting to look at various scalings, e.g., with N_CD, and N_FT, as well as with N_F and
+F_LO.
+
+[7.2] Voltage beamforming
+
+The dominant step here is the brute-force multiplications needed to perform the voltage-
+based beamforming. These are only feasible if tensor cores are used. I suggest
+benchmarking voltage-based beamforming assuming FP16 complex input data, using a
+simple configuration passed to CUTLASS strided batched GEMMs, e.g., data of shape
+[Frequency, Coarse time, Fine time, Antenna] where the sub-matrices [Fine time, Antenna]
+of shape [16, 2048] (m=2048, k=16) are multiplied by weights matrices of shape [Weights,
+Fine time] (n=4000, k=16). It’s likely best to assume that the weights matrix is also strided,
+rather than doing something fancier. This is possible in the case where we need to steer the
+beams as a function of time. I would try a reasonable N_F and N_CT such that the input
+data size is a few tens of GB.
+
+Then, I think it is worth giving the same problem to the TCBF wrapper around ccglib, and do
+a comparative benchmark.
+
+[7.3] Pulsar searching
+
+At this initial stage, the most important benchmarks for pulsar searching are the FFTs. This
+will give us an idea of the urgency of exploring more exotic techniques. We want to
+benchmark the performance of 1D real to complex FFTs of lengths between 2^18 and 2^24
+points. We want to consider batched FFTs with total data lengths of a few tens of GB
+(essentially using much of the HBM on a given superchip). For example, for 2^20-point
+FFTs, the number of FFTs in the batch would be ~1e4.
+
+We should try three libraries at this stage: cuFFT, tcFFT, and nvpl. The first two can operate
+on FP16 data, but nvpl (which operates on CPUs) requires FP32 data. We should determine
+the performance vs FFT length for these large-batch cases, and compare to expectations
+for the architecture.

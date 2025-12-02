@@ -1,0 +1,7 @@
+numpy
+scipy
+matplotlib
+seaborn
+tqdm
+psrqpy>=1.0.4        # optional – only if you swap in real ATNF coords
+astropy

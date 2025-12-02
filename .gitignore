@@ -1,0 +1,14 @@
+# Submodules (tracked separately via .gitmodules)
+software/populations/PsrPopPy3/
+software/search/askap_software/yandasoft/
+
+# Large data files
+*.npz
+*.npy
+*.pdf
+*.odt
+
+# Common ignores
+*.pyc
+__pycache__/
+.DS_Store

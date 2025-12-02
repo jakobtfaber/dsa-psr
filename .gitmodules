@@ -1,0 +1,6 @@
+[submodule "software/populations/PsrPopPy3"]
+	path = software/populations/PsrPopPy3
+	url = https://github.com/evanocathain/PsrPopPy3
+[submodule "software/search/askap_software/yandasoft"]
+	path = software/search/askap_software/yandasoft
+	url = https://github.com/ATNF/yandasoft

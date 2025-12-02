@@ -1,0 +1,47 @@
+# pulsar_catalog.yaml
+# Defines a set of pulsar archetypes for timing simulations.
+---
+# 1. The baseline for PTA science
+class_name: "Typical MSP"
+target_coord: "17h48m52.6s -20d21m28s"
+P_ms: 2.0
+DM: 30.0
+S_1400_mJy: 0.1
+sigma_spin_noise_ns: 100
+
+---
+# 2. An ideal, bright, nearby target
+class_name: "PTA Gem"
+target_coord: "04h37m15.9s -47d15m09s" # J0437-4715
+P_ms: 5.76
+DM: 2.64
+S_1400_mJy: 140.0
+sigma_spin_noise_ns: 20 # Extremely low spin noise
+
+---
+# 3. A challenging but scientifically interesting distant pulsar
+class_name: "Distant Canonical Pulsar"
+target_coord: "18h50m51.3s +04d27m14s"
+P_ms: 800.0
+DM: 200.0
+S_1400_mJy: 0.5
+sigma_spin_noise_ns: 10000 # Very high spin noise
+
+---
+# 4. A representative RRAT
+class_name: "Typical RRAT"
+target_coord: "19h11m08.2s +00d09m05s"
+P_ms: 1200.0
+DM: 50.0
+# Effective mean flux is very low due to high nulling fraction
+S_1400_mJy: 0.01 
+sigma_spin_noise_ns: 5000
+
+---
+# 5. A relativistic Double Neutron Star system
+class_name: "Relativistic DNS"
+target_coord: "19h09m05.3s -37d44m14s" # J1909-3744
+P_ms: 59.0
+DM: 71.0
+S_1400_mJy: 0.3
+sigma_spin_noise_ns: 500

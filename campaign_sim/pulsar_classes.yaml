@@ -1,0 +1,13 @@
+# pulsar_classes.yaml
+---
+class_name: "Typical MSP"
+P_ms: 2.0
+DM: 30.0
+S_1400_mJy: 0.10
+sigma_spin_noise_ns: 100
+---
+class_name: "Bright MSP"
+P_ms: 3.5
+DM: 60.0
+S_1400_mJy: 1.2
+sigma_spin_noise_ns: 80
