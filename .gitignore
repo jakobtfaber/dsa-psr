@@ -12,3 +12,7 @@ software/search/askap_software/yandasoft/
 *.pyc
 __pycache__/
 .DS_Store
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
