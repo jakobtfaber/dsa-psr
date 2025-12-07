@@ -331,7 +331,7 @@ for idx, snr in enumerate([5, 10, 15, 20, 30]):
     
     # Plot dynamic spectrum 
     # freqs array goes from high (1025) to low (700), which is index 0 to N-1
-    # We want to display with high freq at top, so use origin='lower' and reverse extent
+    # We want to display with high freq at top, so use origin='lower' with freqs[-1] to freqs[0]
     im = ax.imshow(image, aspect='auto', origin='lower', 
                    extent=[times[0]*1000, times[-1]*1000, freqs[-1], freqs[0]],
                    cmap='viridis', interpolation='nearest')
@@ -340,7 +340,7 @@ for idx, snr in enumerate([5, 10, 15, 20, 30]):
     freq_ref = freqs.max()  # Highest frequency (1025 MHz)
     t0 = OBS_TIME * 0.3
     sweep_times = []
-    sweep_freqs = np.linspace(freqs[-1], freqs[0], 100)  # From low to high for plotting
+    sweep_freqs = np.linspace(freqs[0], freqs[-1], 100)  # From high to low to match display
     for freq in sweep_freqs:
         delay = K_DM * DM_TRUE * (freq**-2 - freq_ref**-2)
         sweep_times.append((t0 + delay) * 1000)  # Convert to ms
@@ -351,6 +351,7 @@ for idx, snr in enumerate([5, 10, 15, 20, 30]):
     ax.set_ylabel('Frequency (MHz)', fontsize=11)
     ax.set_title(f'S/N = {snr}', fontsize=12, fontweight='bold')
     ax.legend(fontsize=9, loc='upper right')
+    ax.invert_yaxis()  # Flip y-axis so high freq is at top
     
     # Add colorbar
     plt.colorbar(im, ax=ax, label='Intensity')
