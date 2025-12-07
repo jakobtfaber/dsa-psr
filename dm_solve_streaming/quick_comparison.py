@@ -329,20 +329,23 @@ for idx, snr in enumerate([5, 10, 15, 20, 30]):
     ax = axes[idx]
     image = example_pulses[snr]
     
-    # Plot dynamic spectrum (note: freqs go from high to low, so use origin='upper')
-    im = ax.imshow(image, aspect='auto', origin='upper', 
-                   extent=[times[0]*1000, times[-1]*1000, freqs[0], freqs[-1]],
+    # Plot dynamic spectrum 
+    # freqs array goes from high (1025) to low (700), which is index 0 to N-1
+    # We want to display with high freq at top, so use origin='lower' and reverse extent
+    im = ax.imshow(image, aspect='auto', origin='lower', 
+                   extent=[times[0]*1000, times[-1]*1000, freqs[-1], freqs[0]],
                    cmap='viridis', interpolation='nearest')
     
     # Add dispersive sweep curve
-    freq_ref = freqs.max()
+    freq_ref = freqs.max()  # Highest frequency (1025 MHz)
     t0 = OBS_TIME * 0.3
     sweep_times = []
-    for freq in freqs:
+    sweep_freqs = np.linspace(freqs[-1], freqs[0], 100)  # From low to high for plotting
+    for freq in sweep_freqs:
         delay = K_DM * DM_TRUE * (freq**-2 - freq_ref**-2)
         sweep_times.append((t0 + delay) * 1000)  # Convert to ms
     
-    ax.plot(sweep_times, freqs, 'r--', linewidth=2, alpha=0.7, label=f'DM={DM_TRUE:.0f}')
+    ax.plot(sweep_times, sweep_freqs, 'r--', linewidth=2, alpha=0.7, label=f'DM={DM_TRUE:.0f}')
     
     ax.set_xlabel('Time (ms)', fontsize=11)
     ax.set_ylabel('Frequency (MHz)', fontsize=11)
