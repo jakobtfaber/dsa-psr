@@ -52,7 +52,7 @@ class DSA2000Config:
     # Search parameters
     DM_MIN = 0.0      # pc/cm^3
     DM_MAX = 3000.0   # pc/cm^3 (typical for Galactic plane)
-    N_DM_TRIALS = 500  # From Chronoscope spec
+    N_DM_TRIALS = 100  # Reduced for simulation speed (Chronoscope spec: 500)
     
     # Observation parameters
     DWELL_TIME_TARGETED = 1260.0  # seconds (21 min)
@@ -224,7 +224,8 @@ def benchmark_single_pulse(
     snr: float,
     config: DSA2000Config,
     observation_time: float = 10.0,
-    methods: List[str] = None
+    methods: List[str] = None,
+    verbose: bool = False
 ) -> Dict[str, Dict]:
     """
     Benchmark all methods on a single pulse.
@@ -236,6 +237,7 @@ def benchmark_single_pulse(
         config: DSA2000Config instance
         observation_time: Observation duration (s)
         methods: List of methods to test
+        verbose: If True, print progress messages
         
     Returns:
         Dictionary of results for each method
@@ -259,7 +261,8 @@ def benchmark_single_pulse(
     
     # Trial dedispersion (baseline)
     if 'trial_dd' in methods:
-        print(f"  Running trial dedispersion ({config.N_DM_TRIALS} trials)...")
+        if verbose:
+            print(f"  Running trial dedispersion ({config.N_DM_TRIALS} trials)...")
         t_start = time.perf_counter()
         dm_trials = config.get_dm_trials()
         dm_est, snr_est, _ = trial_dedispersion(image, freqs, times, dm_trials)
@@ -326,7 +329,7 @@ def benchmark_snr_sweep(
     dm_true: float = 300.0,
     pulse_width: float = 0.005,
     snr_values: List[float] = None,
-    n_trials: int = 20
+    n_trials: int = 10
 ) -> Dict[str, Dict[str, List]]:
     """
     Benchmark methods across S/N range.
@@ -339,7 +342,7 @@ def benchmark_snr_sweep(
         - time_std: Std computation time (ms)
     """
     if snr_values is None:
-        snr_values = [3, 5, 7, 10, 15, 20, 30]
+        snr_values = [5, 10, 15, 20, 30]
     
     methods = ['trial_dd', 'centroid', 'differential', 'iterative']
     results = {m: {'error': [], 'error_std': [], 'time': [], 'time_std': []} 
@@ -352,13 +355,16 @@ def benchmark_snr_sweep(
         method_times = {m: [] for m in methods}
         
         for trial in range(n_trials):
+            if trial % 3 == 0:
+                print(f"  Trial {trial+1}/{n_trials}...", end='\r')
             trial_results = benchmark_single_pulse(
                 dm_true=dm_true,
                 pulse_width=pulse_width,
                 snr=snr,
                 config=config,
                 observation_time=10.0,
-                methods=methods
+                methods=methods,
+                verbose=False
             )
             
             for method in methods:
@@ -383,11 +389,11 @@ def benchmark_dm_range(
     dm_values: List[float] = None,
     snr: float = 15,
     pulse_width: float = 0.005,
-    n_trials: int = 20
+    n_trials: int = 10
 ) -> Dict[str, Dict[str, List]]:
     """Benchmark methods across DM range."""
     if dm_values is None:
-        dm_values = [50, 100, 200, 300, 500, 750, 1000, 1500, 2000]
+        dm_values = [100, 300, 500, 1000, 1500, 2000]
     
     methods = ['trial_dd', 'centroid', 'differential']
     results = {m: {'error': [], 'error_std': [], 'time': []} for m in methods}
@@ -399,13 +405,16 @@ def benchmark_dm_range(
         method_times = {m: [] for m in methods}
         
         for trial in range(n_trials):
+            if trial % 3 == 0:
+                print(f"  Trial {trial+1}/{n_trials}...", end='\r')
             trial_results = benchmark_single_pulse(
                 dm_true=dm,
                 pulse_width=pulse_width,
                 snr=snr,
                 config=config,
                 observation_time=10.0,
-                methods=methods
+                methods=methods,
+                verbose=False
             )
             
             for method in methods:
@@ -664,26 +673,26 @@ def main():
     
     # Benchmark 1: S/N sweep
     print("\n" + "="*70)
-    print("BENCHMARK 1: S/N SWEEP")
+    print("BENCHMARK 1: S/N SWEEP (10 trials per point)")
     print("="*70)
     results_snr = benchmark_snr_sweep(
         config=config,
         dm_true=300.0,
         pulse_width=0.005,
-        snr_values=[3, 5, 7, 10, 15, 20, 30],
-        n_trials=20
+        snr_values=[5, 10, 15, 20, 30],
+        n_trials=10
     )
     
     # Benchmark 2: DM range
     print("\n" + "="*70)
-    print("BENCHMARK 2: DM RANGE")
+    print("BENCHMARK 2: DM RANGE (10 trials per point)")
     print("="*70)
     results_dm = benchmark_dm_range(
         config=config,
-        dm_values=[50, 100, 200, 300, 500, 750, 1000, 1500, 2000],
+        dm_values=[100, 300, 500, 1000, 1500, 2000],
         snr=15,
         pulse_width=0.005,
-        n_trials=20
+        n_trials=10
     )
     
     # Generate plots
@@ -697,7 +706,7 @@ def main():
     print("SUMMARY STATISTICS (S/N = 15)")
     print("="*70)
     
-    idx_snr15 = 4  # Index for S/N=15 in results
+    idx_snr15 = 2  # Index for S/N=15 in results
     results_dict, _ = results_snr
     
     for method in ['trial_dd', 'differential']:
